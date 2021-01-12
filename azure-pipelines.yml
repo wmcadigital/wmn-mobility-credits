@@ -7,8 +7,8 @@
 trigger:
 - main
 variables:
-- group: 'CoventryMobilityCredits_JM' # mobility credits specific stuff
-- group: 'WmnApi_JM_Dev_Deploy' # things that we can use from the api management variables
+- group: 'CoventryMobilityCredits_Alpha' # mobility credits specific stuff
+- group: 'WmnApi_Alpha01' # things that we can use from the api management variables
 
 pool:
   vmImage: 'ubuntu-latest'
