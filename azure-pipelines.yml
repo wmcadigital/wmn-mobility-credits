@@ -1,0 +1,135 @@
+# Node.js with React
+# Build a Node.js project that uses React.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+
+trigger:
+- main
+variables:
+- group: 'CoventryMobilityCredits_JM' # mobility credits specific stuff
+- group: 'WmnApi_JM_Dev_Deploy' # things that we can use from the api management variables
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+
+- checkout: self
+
+- task: NodeTool@0
+  inputs:
+    versionSpec: '10.x'
+  displayName: 'Install Node.js'
+
+
+- task: PowerShell@2
+  displayName: 'output get suffix arm template'
+  inputs:
+    pwsh: true
+    targetType: 'inline'
+    script: |
+      $makeSuffix=@'
+      {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {
+              "resourceGroupSuffix": "[uniqueString(resourceGroup().id, resourceGroup().location)]"
+          },
+          "resources": [],
+          "outputs": {
+              "suffix": {
+                  "type": "string",
+                  "value": "[variables('resourceGroupSuffix')]"
+              }
+          }
+      }
+      '@
+      $makeSuffix | Out-File -FilePath '$(System.DefaultWorkingDirectory)/make-suffix.json'
+
+- task: AzureResourceManagerTemplateDeployment@3
+  inputs:
+    deploymentScope: 'Resource Group'
+    azureResourceManagerConnection: '$(subscriptionName)'
+    subscriptionId: '$(subscriptionId)'
+    action: 'Create Or Update Resource Group'
+    resourceGroupName: '$(MobilityCreditsResourceGroup)'
+    location: 'UK South'
+    templateLocation: 'Linked artifact'
+    csmFile: '$(System.DefaultWorkingDirectory)/make-suffix.json'
+    deploymentMode: 'Incremental'
+    deploymentOutputs: 'suffixOutput'
+
+- task: PowerShell@2
+  displayName: 'get storage account output parameters'
+  env:
+    SuffixJsonString: '$(suffixOutput)'
+    V5StorageAccountName: '$(V5StorageAccountName)'
+    DefaultWorkingDirectory: $(System.DefaultWorkingDirectory)
+  inputs:
+    pwsh: true
+    targetType: 'inline'
+    script: |
+      # tidy up the output-suffix.json file just so that it doesn't mess up the build somehow...
+      Remove-Item "$env:DefaultWorkingDirectory/make-suffix.json"
+      $x = $env:SuffixJsonString
+      Write-Host "$x"
+      $json = $env:SuffixJsonString | convertfrom-json
+      $suffix = $json.suffix.value
+
+      $V5StorageAccountName = $env:V5StorageAccountName
+      Write-Host "V5StorageAccountName: $V5StorageAccountName"
+      Write-Host "suffix: $suffix"
+
+      $storageWithSuffixExtraLong = "{0}{1}{0}{1}" -f $V5StorageAccountName, $suffix
+      $storageWithSuffix = $storageWithSuffixExtraLong.Substring(0,24)
+      Write-Host "##vso[task.setvariable variable=RGDO_StorageAccountNameWithSuffix]$($storageWithSuffix)"
+
+- script: echo $(RGDO_UniqueString)
+
+- task: AzurePowerShell@5
+  displayName: 'build react form'
+  env:
+    SubscriptionId: '$(subscriptionId)'
+    ResourceGroupName: '$(MobilityCreditsResourceGroup)'
+    ReactFormUrl: '$(ReactFormUrl)'
+    StorageAccountName: '$(RGDO_StorageAccountNameWithSuffix)'
+    DefaultWorkingDirectory: $(System.DefaultWorkingDirectory)
+    ArtifactStagingDirectory: $(Build.ArtifactStagingDirectory)
+    ApimResourceGroup: $(apiManagementResourceGroup)
+    ApimName: $(apiManagementName)
+  inputs:
+    azureSubscription: '$(subscriptionName)'
+    ScriptType: 'InlineScript'
+    Inline: |
+      npm install
+      #npm run build
+      # if this is empty then set it to the url of the blob storage static web hosting 
+      $ReactFormUrl = $env:ReactFormUrl
+      $ResourceGroupName = $env:ResourceGroupName
+      $StorageAccountName = $env:StorageAccountName
+      $SubscriptionId = $env:SubscriptionId
+      $ApimResourceGroup = $env:ApimResourceGroup
+      $ApimName = $env:ApimName
+
+      if([string]::IsNullOrEmpty($ReactFormUrl)){
+          $context = Get-AzSubscription -SubscriptionId $SubscriptionId
+          Set-AzContext $context
+          $storageAccount = Get-AzStorageAccount -ResourceGroupName "$ResourceGroupName" -AccountName "$StorageAccountName"
+          $ReactFormUrl = $storageAccount.PrimaryEndpoints.Web
+      }
+      $apim = Get-AzApiManagement -ResourceGroupName "$ApimResourceGroup" -Name "$ApimName"
+      $apim.RuntimeUrl
+      $reactAppApiHost = "{0}/mobilityscheme/upload" -f $apim.RuntimeUrl
+      ($env:REACT_APP_API_HOST="$reactAppApiHost") -and ($env:PUBLIC_URL = "$ReactFormUrl") -and (npm run-script build)
+    azurePowerShellVersion: 'LatestVersion'
+    pwsh: true
+
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: '$(Pipeline.Workspace)/s/build'
+    artifact: 'react'
+    publishLocation: 'pipeline'
+
