@@ -8,13 +8,15 @@ import { FormErrorContext } from 'globalState/FormErrorContext';
 import Step1 from 'components/Form/Step1/Step1';
 import Step2 from 'components/Form/Step2/Step2';
 import Step3 from 'components/Form/Step3/Step3';
-import Step4 from 'components/Form/Step4/Step4';
 import ProgressIndicator from './ProgressIndicator/ProgressIndicator';
 // Import custom hooks
 import useTrackFormAbandonment from './useTrackFormAbandonment';
 import useLogRocketTracking from './useLogRocketTracking';
 // Import styling
 import s from './Form.module.scss';
+
+import jwt_decode from "jwt-decode";
+
 
 const Form = ({ formSubmitStatus, setFormSubmitStatus }) => {
   const [formState, formDispatch] = useContext(FormContext); // Get the state of form data from FormContext
@@ -43,16 +45,23 @@ const Form = ({ formSubmitStatus, setFormSubmitStatus }) => {
 
       setIsFetching(true); // Set this so we can put loading state on button
 
+      let search = window.location.search;
+      let params = new URLSearchParams(search);
+      let jwtoken = params.get('jwt');
+
+
+
       // Go hit the API with the data
       fetch(process.env.REACT_APP_API_HOST, {
         method: 'post',
         body: JSON.stringify(formState),
         headers: {
           'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + jwtoken,
         },
       })
         .then((response) => {
-          // If the response is successful(200: OK)
+          // If the response is successful
           if (response.status === 200) {
             return response.text(); // Return response (reference number)
           }
@@ -98,6 +107,13 @@ const Form = ({ formSubmitStatus, setFormSubmitStatus }) => {
     }
   };
 
+
+    let search = window.location.search;
+    let params = new URLSearchParams(search);
+    let token = params.get('jwt');
+    let decoded = jwt_decode(token);
+
+
   return (
     <>
       <div className="wmnds-col-1 wmnds-col-md-3-4 ">
@@ -108,6 +124,7 @@ const Form = ({ formSubmitStatus, setFormSubmitStatus }) => {
             {currentStep === 1 && (
               <Step1
                 formRef={formRef}
+				        Step1 vehicle={decoded.CarType}
                 setCurrentStep={setCurrentStep}
                 currentStep={currentStep}
                 setIsPaperTicket={setIsPaperTicket}
@@ -129,13 +146,6 @@ const Form = ({ formSubmitStatus, setFormSubmitStatus }) => {
                 currentStep={currentStep}
                 isPaperTicket={isPaperTicket}
                 isSwiftOnMobile={isSwiftOnMobile}
-              />
-            )}
-            {currentStep === 4 && (
-              <Step4
-                setCurrentStep={setCurrentStep}
-                currentStep={currentStep}
-                isFetching={isFetching}
               />
             )}
           </form>
