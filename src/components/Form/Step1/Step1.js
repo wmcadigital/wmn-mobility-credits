@@ -13,6 +13,7 @@ const Step1 = ({
   setIsPaperTicket,
   setIsSwiftOnMobile,
   formRef,
+  vehicle
 }) => {
   const [formState, formDispatch] = useContext(FormContext); // Get the state of form data from FormContext
   const [errorState, errorDispatch] = useContext(FormErrorContext); // Get the error state of form data from FormErrorContext
@@ -20,14 +21,12 @@ const Step1 = ({
   const handleRadioChange = (e) => {
     formDispatch({ type: 'UPDATE_CUSTOMER_TYPE', payload: e.target.value });
 
-    // If paper ticket chosen
-    if (e.target.value === 'PaperTicket') {
+    if (e.target.value === 'VehicleCorrect') {
       setIsPaperTicket(true); // Then set paper ticket to true (value used in step 3)
     } else {
       setIsPaperTicket(false); // Else set to false
     }
-    // If Swift on Mobile chosen (only one with SwiftPortal val on this step)
-    if (e.target.value === 'SwiftPortal') {
+    if (e.target.value === 'VehicleIncorrect') {
       setIsSwiftOnMobile(true);
     } else {
       setIsSwiftOnMobile(false);
@@ -41,56 +40,26 @@ const Step1 = ({
       window.scrollTo(0, formRef.current.offsetTop); // Scroll to top of form
       errorDispatch({ type: 'CONTINUE_PRESSED', payload: true }); // set continue button pressed to true so errors can show
     } else {
-      errorDispatch({ type: 'CONTINUE_PRESSED', payload: false }); // Reset submit button pressed before going to next step
 
-      // SwiftCard, paperTicket
-      if (
-        formState.CustomerType === 'SwiftCard' ||
-        formState.CustomerType === 'PaperTicket'
-      ) {
-        setCurrentStep(currentStep + 1); // Go to next step(2) so we can set customerType
-      }
-      // classPass, scratchcard
-      else if (
-        formState.CustomerType === 'Scratchcard' ||
-        formState.CustomerType === 'ClassPass'
-      ) {
-        setCurrentStep(currentStep + 3); // Skip to last steps as payment info isn't needed for scratchcard and classPass
-      }
-      // swiftOnMobile;
-      else {
-        setCurrentStep(currentStep + 2); // Skip two steps(step 3) as customerType has been set
+      setCurrentStep(currentStep + 2); // Skip to last steps as payment info isn't needed for scratchcard and classPass
       }
 
-      window.scrollTo(0, 0); // Scroll to top of page
-    }
   };
   return (
     <>
-      <h2>About your ticket</h2>
+      <h2>Your details</h2>
       {errorState.errors.length > 0 && errorState.continuePressed && (
         <GenericError />
       )}
+      <p>We have recorded your vehicle as a {vehicle}.</p>
       <Radios
         name="CustomerType"
-        label="Which best describes your ticket?"
+        label="Is this correct?"
         radios={[
-          { text: 'Swift card', value: 'SwiftCard' },
+          { text: 'Yes', value: 'VehicleCorrect' },
           {
-            text: 'Paper ticket',
-            value: 'PaperTicket',
-          },
-          {
-            text: 'Swift on Mobile app',
-            value: 'SwiftPortal',
-          },
-          {
-            text: 'Scratchcard',
-            value: 'Scratchcard',
-          },
-          {
-            text: 'Class pass',
-            value: 'ClassPass',
+            text: 'No',
+            value: 'VehicleIncorrect',
           },
         ]}
         onChange={handleRadioChange}
